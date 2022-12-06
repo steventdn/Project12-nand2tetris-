@@ -1,0 +1,184 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Memory.jack
+
+/**
+ * This library provides two services: direct access to the computer's main
+ * memory (RAM), and allocation and recycling of memory blocks. The Hack RAM
+ * consists of 32,768 words, each holding a 16-bit binary number.
+ */ 
+class Memory {
+
+    static Array memory;
+    static Array freeList;
+    static Array memoryBottom;
+
+    //16384
+    static int botHeap;
+
+    //2048
+    static int baseHeap;
+
+    //seg LENGTH
+    static int LENGTH;
+
+    //next seg POINTER
+    static int NEXT;
+
+    //block ALLOC length
+    static int ALLOC_LENGTH; 
+
+    /** Initializes memory parameters. */
+    function void init() {
+        
+  
+        let LENGTH = 0;
+        let NEXT = 1;
+
+        let baseHeap = 2048;
+        let botHeap = 16384;
+        let memory = 0;
+        let freeList = baseHeap;
+
+        //16384 - 2048
+        let freeList[LENGTH] = botHeap - baseHeap;
+        let freeList[NEXT] = null; 
+
+        //block[-1]
+        let ALLOC_LENGTH = -1;
+
+        return;
+    }
+
+    /** Returns the value of the main memory at the given address. */
+    function int peek(int address) {
+        return memory[address];
+    }
+
+    /** Sets the value of the main memory at this address
+     *  to the given value. */
+    function void poke(int address, int value) {
+        let memory[address] = value;
+        return;
+    }
+
+    /**
+     * start from freeList
+     * keep finding next free block
+     * if blockSize < bestSize and >= size then set it as bestSize
+     * until next is null
+     * Three cases:
+     * -block found
+     * -block not found, all blocks are full
+     * -freeList is the block
+     */
+    function Array bestFit(int size){
+        var Array currentBlock; 
+        var Array bestBlock;
+
+        var int bestSize;
+        var int currentSize;
+
+        //null
+        let bestBlock = null;
+        let bestSize = botHeap - baseHeap;
+        let currentBlock = freeList;
+
+        if(currentBlock[NEXT] = null){
+            return currentBlock;
+        }
+        while(~(currentBlock = null)){
+            let currentSize = currentBlock[LENGTH] - 1; //alloced block only need one header
+            if(~(currentSize < size) & (currentSize < bestSize)){
+                let bestBlock = currentBlock;
+                let bestSize = currentSize;
+
+            }
+            let currentBlock = currentBlock[NEXT];
+        }
+        return bestBlock;
+    }
+
+    /** finds and allocates from the heap a memory block of the 
+     *  specified size and returns a reference to its base address. */
+    function int alloc(int size) {
+
+        var Array blockFound;
+        var Array nextBlock;
+        var Array result;
+        let blockFound = Memory.bestFit(size);
+        let result = blockFound + 1;
+
+        if(~(blockFound = null)){
+           //allocate part/whole block
+            if(blockFound[LENGTH] > (size + 3)){
+                let nextBlock = blockFound + size + 1;
+                let nextBlock[NEXT] = blockFound[NEXT];
+                let nextBlock[LENGTH] = blockFound[LENGTH] - size - 1;
+                let result[ALLOC_LENGTH] = size + 1;
+                let freeList = nextBlock;
+            }else{
+                //WHOLE
+                let nextBlock = blockFound[NEXT];
+                let result[ALLOC_LENGTH] = blockFound[LENGTH];
+            }
+
+            let blockFound = nextBlock;
+
+        }
+
+        return result;
+    }
+
+    /** De-allocates the given object and frees its space. */
+    function void deAlloc(int object) {
+        var Array prevBlock;
+        var Array nextBlock;
+        var int size;
+        let size = object[ALLOC_LENGTH];
+        //block[-1]
+        let object = object - 1;
+        let prevBlock = Memory.findPreFree(object);
+        if(prevBlock = null){
+            let object[LENGTH] = size;
+            let object[NEXT] = freeList;
+            let freeList = object;
+        } else {
+            if((prevBlock + prevBlock[LENGTH]) = object){
+                let prevBlock[LENGTH] = prevBlock[LENGTH] + size;
+                let object = prevBlock;
+            }else{
+                let object[LENGTH] = size;
+                let object[NEXT] = prevBlock[NEXT];
+                let prevBlock[NEXT] = object;
+            }
+
+        }
+        if((object + object[LENGTH]) = object[NEXT]){
+            let nextBlock = object[NEXT];
+            let object[LENGTH] = object[LENGTH] + nextBlock[LENGTH];
+            let object[NEXT] = nextBlock[NEXT];
+        }
+        return;
+    }    
+
+    /** 
+     * Find previous free block
+     * helper function for deAlloc
+     */
+    function Array findPreFree(int object){
+        var Array prevBlock;
+        //no FREEBLOCK
+        if(freeList > object){
+            return null;
+        }
+        let prevBlock = freeList;
+        //not null or less then
+        while(~(prevBlock[NEXT] = null) & (prevBlock[NEXT] < object)){
+            let prevBlock = prevBlock[NEXT];
+        }
+        return prevBlock;
+
+    }
+}
